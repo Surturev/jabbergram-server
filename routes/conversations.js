@@ -155,4 +155,17 @@ router.post('/:id/read', authMiddleware, async (req, res) => {
     }
 });
 
+router.get('/:id', authMiddleware, async (req, res) => {
+    try {
+        const conversation = await Conversation.findById(req.params.id)
+            .populate('participants', 'username displayName avatarUrl');
+        if (!conversation) return res.status(404).json({ error: 'Чат не найден' });
+        const isParticipant = conversation.participants.some(p => p._id.toString() === req.userId);
+        if (!isParticipant) return res.status(403).json({ error: 'Нет доступа' });
+        res.json(conversation);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

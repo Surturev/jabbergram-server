@@ -48,11 +48,47 @@ router.post('/buy', authMiddleware, async (req, res) => {
         gift.totalSupply += 1;
 
         if (!user.ownedGifts) user.ownedGifts = [];
-        user.ownedGifts.push({
-            giftId: gift._id,
-            purchasedAt: new Date(),
-            isSent: false
-        });
+
+        if (recipientId) {
+            const recipient = await User.findById(recipientId);
+            if (!recipient) return res.status(404).json({ error: 'Получатель не найден' });
+
+            if (!recipient.receivedGifts) recipient.receivedGifts = [];
+            recipient.receivedGifts.push({
+                giftId: gift._id,
+                from: req.userId,
+                receivedAt: new Date()
+            });
+            await recipient.save();
+
+            user.ownedGifts.push({
+                giftId: gift._id,
+                purchasedAt: new Date(),
+                isSent: true,
+                sentTo: recipientId,
+                sentAt: new Date()
+            });
+
+            const Message = require('../models/Message');
+            const Conversation = require('../models/Conversation');
+            const conv = await Conversation.findOne({ type: 'private', participants: { $all: [req.userId, recipientId] } });
+            if (conv) {
+                const msg = new Message({
+                    conversationId: conv._id,
+                    sender: req.userId,
+                    text: `🎁 Отправил подарок: ${gift.name}`,
+                    messageType: 'gift',
+                    fileUrl: gift.imageUrl
+                });
+                await msg.save();
+            }
+        } else {
+            user.ownedGifts.push({
+                giftId: gift._id,
+                purchasedAt: new Date(),
+                isSent: false
+            });
+        }
 
         await user.save();
         await gift.save();

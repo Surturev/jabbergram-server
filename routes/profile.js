@@ -181,6 +181,46 @@ router.get('/search', async (req, res) => {
     }
 });
 
+router.get('/:userId/received-gifts', async (req, res) => {
+    try {
+        const user = await User.findById(req.params.userId)
+            .populate({ path: 'receivedGifts.giftId', select: 'giftId name description rarity imageUrl' })
+            .populate({ path: 'receivedGifts.from', select: 'username displayName avatarUrl' });
+
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+        const gifts = (user.receivedGifts || []).map(g => ({
+            _id: g._id,
+            gift: g.giftId,
+            from: g.from,
+            receivedAt: g.receivedAt
+        }));
+        res.json(gifts);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/my-gifts', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.userId)
+            .populate({ path: 'ownedGifts.giftId', select: 'giftId name description rarity imageUrl priceJabbers' })
+            .populate({ path: 'ownedGifts.sentTo', select: 'username displayName avatarUrl' });
+
+        const owned = (user.ownedGifts || []).map(g => ({
+            _id: g._id,
+            gift: g.giftId,
+            purchasedAt: g.purchasedAt,
+            isSent: g.isSent,
+            sentTo: g.sentTo,
+            sentAt: g.sentAt
+        }));
+        res.json(owned);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.delete('/me', authMiddleware, async (req, res) => {
     try {
         await User.findByIdAndDelete(req.userId);
