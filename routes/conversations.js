@@ -20,9 +20,23 @@ router.get('/', authMiddleware, async (req, res) => {
     try {
         const conversations = await Conversation.find({ participants: req.userId })
             .sort({ lastMessageAt: -1 })
-            .populate('participants', 'username displayName avatarUrl')
-            .populate('lastMessage');
-        res.json(conversations);
+            .populate('participants', 'username displayName avatarUrl isVerified');
+
+        const result = [];
+        for (const conv of conversations) {
+            const unreadCount = await Message.countDocuments({
+                conversationId: conv._id,
+                sender: { $ne: req.userId },
+                readBy: { $nin: [req.userId] },
+                isDeleted: false
+            });
+
+            const convObj = conv.toObject();
+            convObj.unreadCount = unreadCount;
+            result.push(convObj);
+        }
+
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -124,6 +138,18 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         await Message.deleteMany({ conversationId: req.params.id });
         await conversation.deleteOne();
         res.json({ message: 'Чат удалён' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/:id/read', authMiddleware, async (req, res) => {
+    try {
+        await Message.updateMany(
+            { conversationId: req.params.id, sender: { $ne: req.userId }, readBy: { $nin: [req.userId] } },
+            { $addToSet: { readBy: req.userId } }
+        );
+        res.json({ message: 'Прочитано' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
