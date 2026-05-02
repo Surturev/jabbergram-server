@@ -166,12 +166,15 @@ router.post('/folders', authMiddleware, async (req, res) => {
 router.get('/search', async (req, res) => {
     try {
         const { query } = req.query;
+        if (!query || query.trim().length < 1) return res.json([]);
+
+        const sanitizedQuery = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const users = await User.find({
             $or: [
-                { username: { $regex: query, $options: 'i' } },
-                { displayName: { $regex: query, $options: 'i' } }
+                { username: { $regex: sanitizedQuery, $options: 'i' } },
+                { displayName: { $regex: sanitizedQuery, $options: 'i' } }
             ]
-        }).select('_id username displayName avatarUrl bio');
+        }).select('_id username displayName avatarUrl bio').limit(50);
         res.json(users);
     } catch (err) {
         res.status(500).json({ error: err.message });
