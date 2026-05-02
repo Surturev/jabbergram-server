@@ -15,6 +15,7 @@ app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/email-auth', require('./routes/email-auth'));
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/messages', require('./routes/messages'));
