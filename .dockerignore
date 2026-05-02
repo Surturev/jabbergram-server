@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.example
+.git/
+*.log
+.DS_Store
+uploads/
+*.md
+clear_db.js
+fix_user.js
+give_jabbers.js
+grant_admin.js
+make_admin.js
+seed_all_gifts.js
+seedGifts.js
