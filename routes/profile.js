@@ -25,16 +25,6 @@ router.get('/me', authMiddleware, async (req, res) => {
     }
 });
 
-router.get('/:userId', async (req, res) => {
-    try {
-        const user = await User.findById(req.params.userId).select('-password -twoFactorSecret -email');
-        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-        res.json(user);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 router.put('/update', authMiddleware, async (req, res) => {
     try {
         const { firstName, lastName, bio, displayName, avatarUrl, accentColor, settings } = req.body;
@@ -192,6 +182,16 @@ router.delete('/me', authMiddleware, async (req, res) => {
     try {
         await User.findByIdAndDelete(req.userId);
         res.json({ message: 'Аккаунт удалён' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/:userId', async (req, res) => {
+    try {
+        const user = await User.findById(req.params.userId).select('-password -twoFactorSecret -email');
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+        res.json(user);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
