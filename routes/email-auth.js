@@ -114,7 +114,13 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'Email уже зарегистрирован' });
         }
 
-        const username = `${firstName}_${lastName || 'user'}`.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '_').replace(/_+/g, '_');
+        const baseUsername = `${firstName}_${lastName || 'user'}`.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '_').replace(/_+/g, '_');
+        let username = baseUsername;
+        let attempts = 0;
+        while (await User.findOne({ username }) && attempts < 100) {
+            username = `${baseUsername}_${Math.floor(Math.random() * 9000 + 1000)}`;
+            attempts++;
+        }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);

@@ -22,20 +22,28 @@ function authMiddleware(req, res, next) {
 router.post('/register', async (req, res) => {
     try {
         const { username, password, email, phone, firstName, lastName } = req.body;
-        const existingUser = await User.findOne({ $or: [{ username }, { email }, { phone }] });
+
+        const cleanEmail = email && email.trim() ? email.toLowerCase().trim() : undefined;
+        const cleanPhone = phone && phone.trim() ? phone.trim() : undefined;
+
+        const orConditions = [{ username: username.toLowerCase() }];
+        if (cleanEmail) orConditions.push({ email: cleanEmail });
+        if (cleanPhone) orConditions.push({ phone: cleanPhone });
+
+        const existingUser = await User.findOne({ $or: orConditions });
         if (existingUser) return res.status(400).json({ error: 'Пользователь уже существует' });
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const newUser = new User({
-            username,
+            username: username.toLowerCase(),
             password: hashedPassword,
-            email,
-            phone,
+            ...(cleanEmail && { email: cleanEmail }),
+            ...(cleanPhone && { phone: cleanPhone }),
             firstName: firstName || '',
             lastName: lastName || '',
-            displayName: `${firstName} ${lastName}`.trim() || username
+            displayName: `${firstName} ${lastName}`.trim() || username.toLowerCase()
         });
 
         const savedUser = await newUser.save();
