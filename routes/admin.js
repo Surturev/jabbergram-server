@@ -296,4 +296,35 @@ router.put('/users/:id/set-display-name', adminMiddleware, async (req, res) => {
     }
 });
 
+router.get('/stats', adminMiddleware, async (req, res) => {
+    try {
+        const userCount = await User.countDocuments();
+        const convCount = await Conversation.countDocuments();
+        const msgCount = await Message.countDocuments();
+        res.json({ users: userCount, conversations: convCount, messages: msgCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/clean-users', adminMiddleware, async (req, res) => {
+    try {
+        const { keepUsername } = req.body;
+        if (!keepUsername) return res.status(400).json({ error: 'Укажи username' });
+
+        const keeper = await User.findOne({ username: { $regex: new RegExp('^' + keepUsername + '$', 'i') } });
+        if (!keeper) return res.status(404).json({ error: 'Юзер не найден' });
+
+        const deleted = await User.deleteMany({ _id: { $ne: keeper._id } });
+        await Conversation.deleteMany({ participants: { $ne: keeper._id } });
+
+        const convIds = await Conversation.find({}, '_id').then(cs => cs.map(c => c._id));
+        await Message.deleteMany({ conversationId: { $nin: convIds } });
+
+        res.json({ message: `Удалено ${deleted.deletedCount} юзеров`, deletedCount: deleted.deletedCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
