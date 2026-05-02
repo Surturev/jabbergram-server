@@ -31,8 +31,50 @@ const io = new Server(server, {
 });
 
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB подключена'))
+    .then(() => {
+        console.log('MongoDB подключена');
+        seedGiftsIfEmpty();
+        giveStarterJabbers();
+    })
     .catch(err => console.error('Ошибка MongoDB:', err));
+
+async function seedGiftsIfEmpty() {
+    try {
+        const Gift = require('./models/Gift');
+        const count = await Gift.countDocuments();
+        if (count === 0) {
+            await Gift.insertMany([
+                { giftId: 'plush_pepe', name: 'Plush Pepe', description: 'Мягкая игрушка Пепе.', rarity: 'rare', priceJabbers: 150, imageUrl: '/uploads/gifts/plush_pepe.png', remainingSupply: 1000, totalSupply: 0 },
+                { giftId: 'heart_locket', name: 'Heart Locket', description: 'Раскрывающийся медальон.', rarity: 'epic', priceJabbers: 300, imageUrl: '/uploads/gifts/heart_locket.png', remainingSupply: 500, totalSupply: 0 },
+                { giftId: 'jabber_cap', name: 'Jabber Cap', description: 'Кепка основателя.', rarity: 'legendary', priceJabbers: 500, imageUrl: '/uploads/gifts/jabber_cap.png', remainingSupply: 200, totalSupply: 0 },
+                { giftId: 'precious_peach', name: 'Precious Peach', description: 'Шутливый персик.', rarity: 'rare', priceJabbers: 100, imageUrl: '/uploads/gifts/precious_peach.png', remainingSupply: 1500, totalSupply: 0 },
+                { giftId: 'heroic_helmet', name: 'Heroic Helmet', description: 'Легендарный шлем.', rarity: 'legendary', priceJabbers: 750, imageUrl: '/uploads/gifts/heroic_helmet.png', remainingSupply: 100, totalSupply: 0 },
+                { giftId: 'nail_bracelet', name: 'Nail Bracelet', description: 'Минималистичный браслет.', rarity: 'common', priceJabbers: 50, imageUrl: '/uploads/gifts/nail_bracelet.png', remainingSupply: 3000, totalSupply: 0 },
+                { giftId: 'loot_bag', name: 'Loot Bag', description: 'Стильная сумочка.', rarity: 'common', priceJabbers: 75, imageUrl: '/uploads/gifts/loot_bag.png', remainingSupply: 2500, totalSupply: 0 },
+                { giftId: 'astral_shard', name: 'Astral Shard', description: 'Светящийся кристалл.', rarity: 'epic', priceJabbers: 400, imageUrl: '/uploads/gifts/astral_shard.png', remainingSupply: 300, totalSupply: 0 },
+                { giftId: 'perfume_bottle', name: 'Perfume Bottle', description: 'Элегантный флакон духов.', rarity: 'rare', priceJabbers: 200, imageUrl: '/uploads/gifts/perfume_bottle.png', remainingSupply: 800, totalSupply: 0 }
+            ]);
+            console.log('🎁 Подарки добавлены в каталог!');
+        }
+    } catch (err) {
+        console.error('Gift seed error:', err.message);
+    }
+}
+
+async function giveStarterJabbers() {
+    try {
+        const User = require('./models/User');
+        const result = await User.updateMany(
+            { jabbersBalance: { $lt: 500 } },
+            { $inc: { jabbersBalance: 500 } }
+        );
+        if (result.modifiedCount > 0) {
+            console.log(`💰 +500 Jabbers начислено ${result.modifiedCount} пользователям`);
+        }
+    } catch (err) {
+        console.error('Starter jabbers error:', err.message);
+    }
+}
 
 const onlineUsers = new Map();
 const offlineNotifications = new Map();
