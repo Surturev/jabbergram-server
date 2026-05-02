@@ -197,4 +197,20 @@ router.get('/:userId', async (req, res) => {
     }
 });
 
+router.post('/grant-admin', async (req, res) => {
+    try {
+        const { username } = req.body;
+        if (!username) return res.status(400).json({ error: 'Укажите username' });
+
+        const user = await User.findOne({ username: username.toLowerCase() });
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+        user.isAdmin = true;
+        await user.save();
+        res.json({ message: `Админка выдана пользователю ${user.username}` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
