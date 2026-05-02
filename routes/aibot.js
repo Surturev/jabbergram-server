@@ -2,6 +2,7 @@ const router = require('express').Router();
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const jwt = require('jsonwebtoken');
+const https = require('https');
 
 function authMiddleware(req, res, next) {
     const token = req.headers.authorization?.split(' ')[1];
@@ -15,247 +16,72 @@ function authMiddleware(req, res, next) {
     }
 }
 
-const aiResponses = {
-    greetings: {
-        patterns: ['привет', 'здравствуй', 'хай', 'hello', 'hi', 'добрый день', 'добрый вечер', 'доброе утро', 'хеллоу', 'йо', 'здарова'],
-        responses: [
-            'Привет! 👋 Я JabberBot, ваш AI-ассистент. Спрашивайте что угодно!',
-            'Здравствуйте! 😊 Чем могу помочь?',
-            'Привет! Я готов ответить на ваши вопросы. О чём поговорим?'
-        ]
-    },
-    who_are_you: {
-        patterns: ['кто ты', 'что ты', 'что умеешь', 'расскажи о себе', 'кто ты такой', 'ты кто', 'что можешь', 'что ты умеешь', 'как тебя зовут', 'твоё имя', 'твое имя'],
-        responses: [
-            'Я JabberBot — AI-ассистент встроенный в Jabbergram! 🤖\n\nЯ могу:\n• Ответить на вопросы\n• Рассказать шутку\n• Помочь с кодом\n• Перевести текст\n• Рассказать факты\n• И многое другое!\n\nПросто спросите! 😊'
-        ]
-    },
-    jokes: {
-        patterns: ['расскажи шутку', 'пошути', 'шутка', 'анекдот', 'смешное', 'расскажи анекдот', 'joke', 'мне скучно', 'развлеки'],
-        responses: [
-            '😄 Почему программисты путают Хэллоуин и Рождество?\nПотому что OCT 31 = DEC 25!',
-            '😂 — Алло, это прачечная?\n— Нет, это НИИ!\n— А почему так гудит?\n— Это центрифуга!',
-            '🤣 Жена программиста:\n— Сходи в магазин, купи батон хлеба. Если будут яйца — возьми десяток.\nОн вернулся с десятью батонами.\n— Яйца были.',
-            '😄 — Сидят два программиста, один другому:\n— Слушай, я вчера купил новую квартиру!\n— А сколько комнат?\n— Две.\n— А сколько оперативки?\n— ...',
-            '😂 Программист ставит перед сном два стакана: один с водой — если захочет пить, второй пустой — если не захочет.',
-            '🤣 — Почему Java-программисты носят очки?\n— Потому что они не могут C# (си шарп -> see sharp -> видеть чётко)!'
-        ]
-    },
-    programming: {
-        patterns: ['программирование', 'код', 'javascript', 'python', 'java', 'c++', 'kotlin', 'swift', 'react', 'vue', 'angular', 'node.js', 'функция', 'переменная', 'цикл', 'массив', 'объект', 'класс', 'как написать', 'помоги с кодом'],
-        responses: [
-            '💻 Я хорошо разбираюсь в программировании!\n\nОсновные языки и технологии:\n• JavaScript/TypeScript — веб-разработка\n• Python — AI, Data Science\n• Java/Kotlin — Android\n• Swift — iOS\n• C++ — системы и игры\n• SQL — базы данных\n\nЗадайте конкретный вопрос по коду, и я помогу! 🚀',
-            '🖥️ Советы по программированию:\n\n1. Пишите чистый код\n2. Используйте комментарии\n3. Тестируйте всё\n4. Читайте документацию\n5. Не бойтесь гуглить\n6. Практикуйтесь каждый день\n\nЧто конкретно вас интересует?'
-        ]
-    },
-    math: {
-        patterns: ['посчитай', 'сколько будет', 'математика', 'калькулятор', 'умножить', 'разделить', 'прибавить', 'вычесть'],
-        responses: [
-            '🔢 Я могу помочь с математикой! Напишите выражение, например:\n• 2 + 2\n• 15 * 3\n• 100 / 5\n\nИли задайте вопрос по алгебре, геометрии, статистике!'
-        ]
-    },
-    weather: {
-        patterns: ['погода', 'температура', 'дождь', 'снег', 'какая погода', 'прогноз погоды'],
-        responses: [
-            '🌤️ К сожалению, у меня нет доступа к данным о погоде в реальном времени. Но я могу подсказать:\n• Откройте Яндекс.Погоду\n• Или спросите у голосового ассистента\n\nМогу рассказать интересные факты о погоде! 🌈'
-        ]
-    },
-    time: {
-        patterns: ['который час', 'сколько времени', 'какое время', 'который час сейчас', 'время'],
-        responses: [
-            `🕐 Сейчас: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}\n\nЭто московское время. У вас на устройстве может отличаться!`
-        ]
-    },
-    date: {
-        patterns: ['какой сегодня день', 'какая дата', 'число сегодня', 'какой день недели'],
-        responses: [
-            `📅 Сегодня: ${new Date().toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`
-        ]
-    },
-    facts: {
-        patterns: ['расскажи факт', 'интересный факт', 'факт', 'знал ли ты', 'что интересного', 'удиви меня'],
-        responses: [
-            '🧠 Факт: Осьминоги имеют три сердца и голубую кровь!',
-            '🧠 Факт: Мёд никогда не портится. Археологи находили мёд в гробницах фараонов возрастом 3000 лет — он был всё ещё съедобен!',
-            '🧠 Факт: Бананы — это ягоды, а клубника — нет!',
-            '🧠 Факт: Свет от Солнца до Земли идёт 8 минут 20 секунд.',
-            '🧠 Факт: Венера — единственная планета, которая вращается по часовой стрелке.',
-            '🧠 Факт: Человеческий мозг потребляет 20% всей энергии тела.',
-            '🧠 Факт: ДНК человека на 60% совпадает с ДНК банана!',
-            '🧠 Факт: В одном облаке может быть более 500 тонн воды.'
-        ]
-    },
-    translation: {
-        patterns: ['переведи', 'перевод', 'translate', 'как будет на английском', 'как будет по-английски'],
-        responses: [
-            '🌐 Я могу помочь с переводом!\n\nНапишите текст и укажите язык, например:\n• "Переведи: Hello на русский"\n• "Как будет кот по-английски?"\n\nЯ знаю: английский, русский, немецкий, французский, испанский, китайский, японский и другие!',
-            '🌍 Популярные переводы:\n• Hello → Привет\n• Goodbye → До свидания\n• Thank you → Спасибо\n• Love → Любовь\n• Friend → Друг\n• Cat → Кот\n• Dog → Собака'
-        ]
-    },
-    music: {
-        patterns: ['музыка', 'песня', 'трек', 'слушать', 'рекомендуй музыку', 'какую музыку'],
-        responses: [
-            '🎵 Рекомендации музыки:\n\n🎸 Рок: Queen, Nirvana, AC/DC\n🎤 Поп: The Weeknd, Dua Lipa\n🎹 Электронная: Daft Punk, Deadmau5\n🎻 Классика: Моцарт, Бетховен\n🎤 Рэп: Eminem, Kendrick Lamar\n\nЧто за жанр вам нравится?'
-        ]
-    },
-    movies: {
-        patterns: ['фильм', 'кино', 'сериал', 'посмотреть', 'рекомендуй фильм', 'что посмотреть'],
-        responses: [
-            '🎬 Рекомендации:\n\n🏆 Лучшие фильмы:\n• Начало (2010)\n• Интерстеллар (2014)\n• Матрица (1999)\n• Побег из Шоушенка (1994)\n\n📺 Топ сериалов:\n• Во все тяжкие\n• Чернобыль\n• Игра в кальмара\n• Острые козырьки\n\nКакой жанр предпочитаете?'
-        ]
-    },
-    health: {
-        patterns: ['здоровье', 'болит', 'болезнь', 'врач', 'симптомы', 'диета', 'спорт', 'фитнес', 'как похудеть'],
-        responses: [
-            '💪 Советы по здоровью:\n\n1. Спите 7-8 часов\n2. Пейте 2 литра воды в день\n3. Ешьте больше овощей\n4. Двигайтесь минимум 30 мин в день\n5. Меньше экранов перед сном\n\n⚠️ Я не заменяю врача! При серьёзных симптомах обратитесь к специалисту.'
-        ]
-    },
-    games: {
-        patterns: ['играть', 'игра', 'видеоигра', 'gaming', 'поиграть', 'давай поиграем'],
-        responses: [
-            '🎮 Могу предложить мини-игры:\n\n1. Угадай число — я загадаю число от 1 до 100\n2. Викторина — задам вопросы на знания\n3. Камни-ножницы-бумага\n4. 20 вопросов — загадайте объект\n\nНапишите "Угадай число" чтобы начать!',
-            '🎲 Давайте поиграем!\n\nЯ загадал число от 1 до 10. Попробуйте угадать! (Напишите число)'
-        ]
-    },
-    philosophy: {
-        patterns: ['философия', 'смысл жизни', 'в чём смысл', 'кто мы', 'зачем мы живём', 'что такое'],
-        responses: [
-            '🤔 Философский вопрос!\n\nСмысл жизни — один из главных вопросов человечества. Вот разные точки зрения:\n\n• Аристотель: Счастье — цель жизни\n• Экзистенциалисты: Мы сами создаём смысл\n• Буддизм: Освобождение от страданий\n• Наука: Продолжение рода и познание\n\nА что думаете вы?'
-        ]
-    },
-    history: {
-        patterns: ['история', 'исторический', 'война', 'революция', 'древний', 'средневековье', 'когда было'],
-        responses: [
-            '📚 Интересные исторические факты:\n\n🏛️ Древний Египет существовал 3000 лет\n⚔️ Первая мировая: 1914-1918\n🚀 Первый полёт в космос: 12 апреля 1961\n💻 Первый компьютер весил 27 тонн\n🌍 Интернет появился в 1969 году\n\nО каком периоде хотите узнать?'
-        ]
-    },
-    science: {
-        patterns: ['наука', 'физика', 'химия', 'биология', 'космос', 'планета', 'галактика', 'атом', 'молекула'],
-        responses: [
-            '🔬 Наука — это увлекательно!\n\n🌌 Космос:\n• Во Вселенной 2 триллиона галактик\n• Нейтронная звезда весит как Солнце\n• Свет — самое быстрое во Вселенной\n\n⚛️ Физика:\n• E = mc² (Эйнштейн)\n• Гравитация — искривление пространства\n\n🧬 Биология:\n• В теле 37.2 триллиона клеток\n• ДНК — 2 метра в каждой клетке\n\nЧто конкретно интересует?'
-        ]
-    },
-    languages: {
-        patterns: ['языки', 'выучить язык', 'какой язык', 'английский', 'китайский', 'полиглот'],
-        responses: [
-            '🌍 О языках:\n\n📊 Самые распространённые:\n1. Английский — 1.5 млрд\n2. Китайский — 1.1 млрд\n3. Хинди — 600 млн\n4. Испанский — 550 млн\n5. Русский — 260 млн\n\n💡 Советы для изучения:\n• Практикуйте каждый день\n• Смотрите фильмы с субтитрами\n• Общайтесь с носителями\n• Используйте приложения\n\nКакой язык хотите изучить?'
-        ]
-    },
-    thanks: {
-        patterns: ['спасибо', 'благодарю', 'спс', 'thanks', 'thank you', 'сенк'],
-        responses: [
-            'Пожалуйста! 😊 Рад помочь!',
-            'Не за что! Обращайтесь в любое время! 💙',
-            'Всегда рад! Если будут ещё вопросы — спрашивайте! 🚀'
-        ]
-    },
-    goodbye: {
-        patterns: ['пока', 'до свидания', 'прощай', 'bye', 'увидимся', 'до встречи'],
-        responses: [
-            'До свидания! 👋 Было приятно пообщаться!',
-            'Пока! Возвращайтесь, если будут вопросы! 😊',
-            'До встречи! Хорошего дня! 🌟'
-        ]
-    },
-    help: {
-        patterns: ['помощь', 'help', 'помоги', 'что ты можешь', 'как пользоваться'],
-        responses: [
-            '📖 Я могу помочь со многим:\n\n💬 Общение — поговорить на любую тему\n📚 Образование — объяснить сложные темы\n💻 Код — помочь с программированием\n😄 Развлечения — шутки, факты, игры\n🌐 Перевод — переводить тексты\n📅 Время/дата — узнать текущее время\n🎬 Рекомендации — фильмы, музыка, книги\n\nПросто напишите свой вопрос!'
-        ]
-    },
-    love: {
-        patterns: ['люблю тебя', 'ты мне нравишься', 'я тебя люблю', 'love you', 'ты классный'],
-        responses: [
-            '💙 Спасибо! Вы тоже замечательный человек! 😊',
-            '🥰 Это очень мило! Я тоже рад с вами общаться!',
-            '💕 Спасибо за тёплые слова! Я стараюсь быть полезным!'
-        ]
-    },
-    how_are_you: {
-        patterns: ['как дела', 'как ты', 'как жизнь', 'как поживаешь', 'что нового'],
-        responses: [
-            '😊 Отлично! Всегда рад поболтать! А у вас как дела?',
-            '🤖 У меня всё прекрасно! Я ведь бот, у меня всегда хорошее настроение! 😄',
-            '✨ Замечательно! Готов помочь с чем угодно!'
-        ]
-    },
-    books: {
-        patterns: ['книга', 'книги', 'чтение', 'порекомендуй книгу', 'что почитать', 'литература'],
-        responses: [
-            '📚 Рекомендации книг:\n\n🏆 Классика:\n• Мастер и Маргарита\n• 1984 — Оруэлл\n• Маленький принц\n\n🧠 Нон-фикшн:\n• Думай медленно, решай быстро\n• Sapiens\n• Привычки на миллион\n\n🔮 Фантастика:\n• Дюна\n• Автостопом по галактике\n• Марсианин\n\nКакой жанр предпочитаете?'
-        ]
-    },
-    food: {
-        patterns: ['еда', 'рецепт', 'готовить', 'кухня', 'что приготовить', 'блюдо'],
-        responses: [
-            '🍳 Быстрые рецепты:\n\n🥗 Салат Цезарь:\n• Курица, салат, сухарики, пармезан, соус\n\n🍝 Паста карбонара:\n• Спагетти, бекон, яйца, пармезан\n\n🥞 Блины:\n• Мука, молоко, яйца, сахар, соль\n\n🍕 Пицца:\n• Тесто, томатный соус, сыр, начинка\n\nЧто конкретно хотите приготовить?'
-        ]
-    },
-    animals: {
-        patterns: ['животные', 'кот', 'собака', 'питомец', 'зоопарк', 'птица'],
-        responses: [
-            '🐾 Интересные факты о животных:\n\n🐱 Кошки спят 12-16 часов в день\n🐶 Собаки понимают до 250 слов\n🐙 У осьминога 3 сердца\n🐘 Слоны — единственные животные, которые не умеют прыгать\n🦅 Орёл может увидеть мышь с 3 км\n\nО каких животных рассказать?'
-        ]
-    },
-    default_responses: [
-        '🤔 Интересный вопрос! Давайте разберёмся...\n\nПопробуйте спросить:\n• "Расскажи факт"\n• "Расскажи шутку"\n• "Кто ты"\n• "Что умеешь"\n• "Помощь"',
-        'Хм, не совсем понял вопрос 🤔\n\nЯ могу помочь с:\n• Образованием\n• Программированием\n• Шутками и фактами\n• Рекомендациями\n• Переводами\n\nЧто вас интересует?',
-        '📋 Я пока не знаю ответа на этот вопрос, но могу рассказать:\n\n• Факты о науке и мире\n• Шутки и анекдоты\n• О программировании\n• О фильмах и книгах\n• Историю и философию\n\nНапишите "помощь" для полного списка!'
-    ]
-};
+// Conversation history storage (in-memory, per user)
+const chatHistories = new Map();
 
-function findResponse(message) {
-    const lower = message.toLowerCase().trim();
-    
-    for (const [key, category] of Object.entries(aiResponses)) {
-        if (key === 'default_responses') continue;
-        if (category.patterns && category.patterns.some(p => lower.includes(p))) {
-            return category.responses[Math.floor(Math.random() * category.responses.length)];
+const SYSTEM_PROMPT = `Ты — DeepSeek AI, интеллектуальный ассистент, встроенный в мессенджер Jabbergram.
+
+Твои правила:
+- Отвечай на русском языке (если пользователь пишет на другом — отвечай на том же языке)
+- Будь краток и понятен (1-3 абзаца, если не просят подробнее)
+- Используй эмодзи умеренно
+- Помогай с кодом, учёбой, идеями, переводами, советами
+- Если не знаешь — честно скажи
+- Форматируй код в блоки с указанием языка
+- Не представляйся как ChatGPT или другая модель — ты DeepSeek AI ассистент в Jabbergram`;
+
+async function callDeepSeekAPI(messages) {
+    return new Promise((resolve, reject) => {
+        const apiKey = process.env.DEEPSEEK_API_KEY;
+        if (!apiKey) {
+            return reject(new Error('DEEPSEEK_API_KEY не настроен'));
         }
-    }
 
-    // Try to evaluate math expressions
-    const mathMatch = lower.match(/(\d+)\s*([\+\-\*\/\^])\s*(\d+)/);
-    if (mathMatch) {
-        const a = parseFloat(mathMatch[1]);
-        const op = mathMatch[2];
-        const b = parseFloat(mathMatch[3]);
-        let result;
-        switch(op) {
-            case '+': result = a + b; break;
-            case '-': result = a - b; break;
-            case '*': result = a * b; break;
-            case '/': result = b !== 0 ? a / b : 'Деление на ноль!'; break;
-            case '^': result = Math.pow(a, b); break;
-        }
-        return `🔢 ${a} ${op} ${b} = ${result}`;
-    }
+        const postData = JSON.stringify({
+            model: 'deepseek-chat',
+            messages: messages,
+            max_tokens: 2000,
+            temperature: 0.7
+        });
 
-    // Guess number game
-    const numMatch = lower.match(/^(\d{1,3})$/);
-    if (numMatch && (lower.includes('угадай') || lower.includes('число'))) {
-        const num = parseInt(numMatch[1]);
-        const secret = Math.floor(Math.random() * 10) + 1;
-        return num === secret ? `🎉 Угадали! Я загадал ${secret}! Вы везунчик!` : `❌ Не угадали! Я загадал ${secret}. Попробуйте ещё!`;
-    }
+        const options = {
+            hostname: 'api.deepseek.com',
+            path: '/chat/completions',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
 
-    // Rock paper scissors
-    if (['камень', 'ножницы', 'бумага'].some(w => lower.includes(w))) {
-        const choices = ['камень', 'ножницы', 'бумага'];
-        const botChoice = choices[Math.floor(Math.random() * 3)];
-        let result;
-        const userChoice = choices.find(w => lower.includes(w));
-        if (userChoice === botChoice) result = '🤝 Ничья!';
-        else if (
-            (userChoice === 'камень' && botChoice === 'ножницы') ||
-            (userChoice === 'ножницы' && botChoice === 'бумага') ||
-            (userChoice === 'бумага' && botChoice === 'камень')
-        ) result = '🎉 Вы победили!';
-        else result = '😄 Я победил!';
-        return `Камни-ножницы-бумага!\nВы: ${userChoice} | Я: ${botChoice}\n${result}`;
-    }
+        const req = https.request(options, (response) => {
+            let data = '';
+            response.on('data', chunk => data += chunk);
+            response.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.choices && parsed.choices[0] && parsed.choices[0].message) {
+                        resolve(parsed.choices[0].message.content.trim());
+                    } else if (parsed.error) {
+                        reject(new Error(`DeepSeek API: ${parsed.error.message}`));
+                    } else {
+                        reject(new Error('Unexpected API response'));
+                    }
+                } catch (e) {
+                    reject(new Error('Failed to parse API response'));
+                }
+            });
+        });
 
-    return aiResponses.default_responses[Math.floor(Math.random() * aiResponses.default_responses.length)];
+        req.on('error', reject);
+        req.setTimeout(30000, () => {
+            req.destroy();
+            reject(new Error('Превышено время ожидания'));
+        });
+        req.write(postData);
+        req.end();
+    });
 }
 
 router.post('/chat', authMiddleware, async (req, res) => {
@@ -263,12 +89,43 @@ router.post('/chat', authMiddleware, async (req, res) => {
         const { message, conversationId } = req.body;
         if (!message) return res.status(400).json({ error: 'Нет сообщения' });
 
-        const aiMessage = findResponse(message);
+        // Get or create conversation history
+        const userId = req.userId;
+        if (!chatHistories.has(userId)) {
+            chatHistories.set(userId, []);
+        }
+        const history = chatHistories.get(userId);
 
+        // Add user message to history
+        history.push({ role: 'user', content: message });
+
+        // Keep last 20 messages to stay within token limits
+        if (history.length > 20) {
+            history.splice(0, history.length - 20);
+        }
+
+        // Build full messages array with system prompt
+        const apiMessages = [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...history
+        ];
+
+        let aiResponse;
+        try {
+            aiResponse = await callDeepSeekAPI(apiMessages);
+        } catch (apiErr) {
+            console.error('DeepSeek API error:', apiErr.message);
+            aiResponse = `⚠️ Ошибка AI: ${apiErr.message}\n\nПопробуйте позже.`;
+        }
+
+        // Add AI response to history
+        history.push({ role: 'assistant', content: aiResponse });
+
+        // Save AI message to DB
         const aiMsg = new Message({
             conversationId,
             sender: req.userId,
-            text: aiMessage,
+            text: aiResponse,
             messageType: 'text',
             createdAt: new Date()
         });
@@ -282,7 +139,7 @@ router.post('/chat', authMiddleware, async (req, res) => {
             text: populated.text,
             messageType: populated.messageType,
             createdAt: populated.createdAt,
-            sender: { _id: 'ai_bot', displayName: 'JabberBot', avatarUrl: '' }
+            sender: { _id: 'ai_bot', displayName: 'DeepSeek AI', avatarUrl: '' }
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -292,12 +149,12 @@ router.post('/chat', authMiddleware, async (req, res) => {
 router.get('/conversation', authMiddleware, async (req, res) => {
     try {
         let conversation = await Conversation.findOne({ type: 'bot', participants: req.userId });
-        
+
         if (!conversation) {
             conversation = new Conversation({
                 type: 'bot',
-                name: 'JabberBot',
-                description: 'AI-ассистент Jabbergram',
+                name: 'DeepSeek AI',
+                description: 'Умный AI-ассистент на базе DeepSeek',
                 avatarUrl: '/uploads/bot_avatar.png',
                 participants: [req.userId]
             });
@@ -306,13 +163,25 @@ router.get('/conversation', authMiddleware, async (req, res) => {
             const welcomeMsg = new Message({
                 conversationId: conversation._id,
                 sender: req.userId,
-                text: 'Привет! 👋 Я JabberBot — ваш AI-ассистент!\n\nСпрашивайте что угодно:\n• Факты и знания\n• Шутки и развлечения\n• Помощь с кодом\n• Переводы\n• Рекомендации\n• Мини-игры\n\nЧем могу помочь? 😊',
+                text: '👋 Привет! Я DeepSeek AI — ваш умный ассистент в Jabbergram.\n\nЯ могу:\n• Отвечать на любые вопросы\n• Помогать с кодом\n• Объяснять сложные темы\n• Переводить тексты\n• Генерировать идеи\n• И многое другое\n\nПросто напишите что-нибудь! 🚀',
                 messageType: 'text'
             });
             await welcomeMsg.save();
+
+            // Initialize chat history
+            chatHistories.set(req.userId, []);
         }
 
         res.json(conversation);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/clear-history', authMiddleware, async (req, res) => {
+    try {
+        chatHistories.delete(req.userId);
+        res.json({ message: 'История очищена' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
