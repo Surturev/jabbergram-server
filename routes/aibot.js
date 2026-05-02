@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const https = require('https');
 
@@ -16,7 +17,6 @@ function authMiddleware(req, res, next) {
     }
 }
 
-// Conversation history storage (in-memory, per user)
 const chatHistories = new Map();
 
 const SYSTEM_PROMPT = `Ты — DeepSeek AI, интеллектуальный ассистент, встроенный в мессенджер Jabbergram.
@@ -33,8 +33,8 @@ const SYSTEM_PROMPT = `Ты — DeepSeek AI, интеллектуальный а
 async function callDeepSeekAPI(messages) {
     return new Promise((resolve, reject) => {
         const apiKey = process.env.DEEPSEEK_API_KEY;
-        if (!apiKey) {
-            return reject(new Error('DEEPSEEK_API_KEY не настроен'));
+        if (!apiKey || apiKey === 'your_deepseek_api_key_here') {
+            return reject(new Error('DEEPSEEK_API_KEY не настроен. Добавьте ключ в переменные Railway.'));
         }
 
         const postData = JSON.stringify({
@@ -55,33 +55,55 @@ async function callDeepSeekAPI(messages) {
             }
         };
 
+        console.log('🤖 Вызов DeepSeek API...');
+
         const req = https.request(options, (response) => {
             let data = '';
             response.on('data', chunk => data += chunk);
             response.on('end', () => {
                 try {
                     const parsed = JSON.parse(data);
+                    console.log('DeepSeek response status:', response.statusCode);
                     if (parsed.choices && parsed.choices[0] && parsed.choices[0].message) {
                         resolve(parsed.choices[0].message.content.trim());
                     } else if (parsed.error) {
                         reject(new Error(`DeepSeek API: ${parsed.error.message}`));
                     } else {
-                        reject(new Error('Unexpected API response'));
+                        reject(new Error(`DeepSeek API статус: ${response.statusCode}`));
                     }
                 } catch (e) {
-                    reject(new Error('Failed to parse API response'));
+                    reject(new Error('Не удалось разобрать ответ API'));
                 }
             });
         });
 
-        req.on('error', reject);
-        req.setTimeout(30000, () => {
+        req.on('error', (e) => {
+            console.error('DeepSeek request error:', e.message);
+            reject(new Error(`Ошибка соединения: ${e.message}`));
+        });
+        req.setTimeout(45000, () => {
             req.destroy();
-            reject(new Error('Превышено время ожидания'));
+            reject(new Error('Превышено время ожидания (45с)'));
         });
         req.write(postData);
         req.end();
     });
+}
+
+async function getOrCreateBotUser() {
+    let bot = await User.findOne({ username: 'deepseek_ai_bot' });
+    if (!bot) {
+        bot = new User({
+            username: 'deepseek_ai_bot',
+            displayName: 'DeepSeek AI',
+            email: 'bot@jabbergram.local',
+            phone: '',
+            password: 'bot_no_login',
+            isBot: true
+        });
+        await bot.save();
+    }
+    return bot;
 }
 
 router.post('/chat', authMiddleware, async (req, res) => {
@@ -89,22 +111,17 @@ router.post('/chat', authMiddleware, async (req, res) => {
         const { message, conversationId } = req.body;
         if (!message) return res.status(400).json({ error: 'Нет сообщения' });
 
-        // Get or create conversation history
         const userId = req.userId;
         if (!chatHistories.has(userId)) {
             chatHistories.set(userId, []);
         }
         const history = chatHistories.get(userId);
 
-        // Add user message to history
         history.push({ role: 'user', content: message });
-
-        // Keep last 20 messages to stay within token limits
         if (history.length > 20) {
             history.splice(0, history.length - 20);
         }
 
-        // Build full messages array with system prompt
         const apiMessages = [
             { role: 'system', content: SYSTEM_PROMPT },
             ...history
@@ -118,13 +135,13 @@ router.post('/chat', authMiddleware, async (req, res) => {
             aiResponse = `⚠️ Ошибка AI: ${apiErr.message}\n\nПопробуйте позже.`;
         }
 
-        // Add AI response to history
         history.push({ role: 'assistant', content: aiResponse });
 
-        // Save AI message to DB
+        const botUser = await getOrCreateBotUser();
+
         const aiMsg = new Message({
             conversationId,
-            sender: req.userId,
+            sender: botUser._id,
             text: aiResponse,
             messageType: 'text',
             createdAt: new Date()
@@ -139,9 +156,15 @@ router.post('/chat', authMiddleware, async (req, res) => {
             text: populated.text,
             messageType: populated.messageType,
             createdAt: populated.createdAt,
-            sender: { _id: 'ai_bot', displayName: 'DeepSeek AI', avatarUrl: '' }
+            sender: {
+                _id: populated.sender?._id?.toString() || 'ai_bot',
+                displayName: populated.sender?.displayName || 'DeepSeek AI',
+                username: populated.sender?.username || 'deepseek_ai_bot',
+                avatarUrl: populated.sender?.avatarUrl || ''
+            }
         });
     } catch (err) {
+        console.error('AI chat error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -160,20 +183,22 @@ router.get('/conversation', authMiddleware, async (req, res) => {
             });
             await conversation.save();
 
+            const botUser = await getOrCreateBotUser();
+
             const welcomeMsg = new Message({
                 conversationId: conversation._id,
-                sender: req.userId,
+                sender: botUser._id,
                 text: '👋 Привет! Я DeepSeek AI — ваш умный ассистент в Jabbergram.\n\nЯ могу:\n• Отвечать на любые вопросы\n• Помогать с кодом\n• Объяснять сложные темы\n• Переводить тексты\n• Генерировать идеи\n• И многое другое\n\nПросто напишите что-нибудь! 🚀',
                 messageType: 'text'
             });
             await welcomeMsg.save();
 
-            // Initialize chat history
             chatHistories.set(req.userId, []);
         }
 
         res.json(conversation);
     } catch (err) {
+        console.error('AI conversation error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -191,7 +216,8 @@ router.get('/messages/:conversationId', authMiddleware, async (req, res) => {
     try {
         const messages = await Message.find({ conversationId: req.params.conversationId })
             .sort({ createdAt: 1 })
-            .limit(100);
+            .limit(100)
+            .populate('sender', 'username displayName avatarUrl');
         res.json(messages);
     } catch (err) {
         res.status(500).json({ error: err.message });

@@ -39,6 +39,7 @@ const UserSchema = new mongoose.Schema({
     jabbersBalance: { type: Number, default: 0 },
     isVip: { type: Boolean, default: false },
     isAdmin: { type: Boolean, default: false },
+    isBot: { type: Boolean, default: false },
     isVerified: { type: Boolean, default: false },
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: '' },
