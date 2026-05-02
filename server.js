@@ -324,7 +324,7 @@ const LATEST_VERSION = {
     versionCode: 3,
     versionName: "3.0",
     changelog: "• Админ-панель\n• Поиск по username\n• Новые профили и настройки\n• Счётчик непрочитанных\n• Улучшенный UI чатов\n• Исправление ошибок",
-    downloadUrl: "/api/app/download"
+    downloadUrl: "https://github.com/Surturev/jabbergram-server/releases/latest/download/Jabbergram.apk"
 };
 
 app.get('/health', (req, res) => {
@@ -333,14 +333,6 @@ app.get('/health', (req, res) => {
 
 app.get('/api/app/version', (req, res) => {
     res.json(LATEST_VERSION);
-});
-
-app.get('/api/app/download', (req, res) => {
-    const apkPath = path.join(__dirname, 'Jabbergram.apk');
-    if (!require('fs').existsSync(apkPath)) {
-        return res.status(404).json({ error: 'APK не найден на сервере' });
-    }
-    res.download(apkPath, 'Jabbergram.apk');
 });
 
 process.on('SIGTERM', () => {
