@@ -15,9 +15,19 @@ function authMiddleware(req, res, next) {
     }
 }
 
+router.get('/me', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.userId).select('-password -twoFactorSecret');
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get('/:userId', async (req, res) => {
     try {
-        const user = await User.findById(req.params.userId).select('-password -twoFactorSecret');
+        const user = await User.findById(req.params.userId).select('-password -twoFactorSecret -email');
         if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
         res.json(user);
     } catch (err) {
@@ -27,16 +37,39 @@ router.get('/:userId', async (req, res) => {
 
 router.put('/update', authMiddleware, async (req, res) => {
     try {
-        const { firstName, lastName, bio, displayName, avatarUrl, settings } = req.body;
+        const { firstName, lastName, bio, displayName, avatarUrl, accentColor, settings } = req.body;
         const update = {};
         if (firstName !== undefined) update.firstName = firstName;
         if (lastName !== undefined) update.lastName = lastName;
         if (bio !== undefined) update.bio = bio;
         if (displayName !== undefined) update.displayName = displayName;
         if (avatarUrl !== undefined) update.avatarUrl = avatarUrl;
-        if (settings) update.settings = settings;
+        if (accentColor !== undefined) update.accentColor = accentColor;
+        if (settings) update.settings = { ...update.settings, ...settings };
 
         const user = await User.findByIdAndUpdate(req.userId, { $set: update }, { new: true }).select('-password -twoFactorSecret');
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/username', authMiddleware, async (req, res) => {
+    try {
+        const { username } = req.body;
+        if (!username || username.length < 3) {
+            return res.status(400).json({ error: 'Минимум 3 символа' });
+        }
+
+        const existing = await User.findOne({ username: username.toLowerCase(), _id: { $ne: req.userId } });
+        if (existing) {
+            return res.status(400).json({ error: 'Это имя пользователя уже занято' });
+        }
+
+        const user = await User.findByIdAndUpdate(req.userId,
+            { username: username.toLowerCase() },
+            { new: true }
+        ).select('-password -twoFactorSecret');
         res.json(user);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -112,7 +145,7 @@ router.post('/switch-profile', authMiddleware, async (req, res) => {
 
 router.get('/contacts', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId).populate('contacts', 'username displayName avatarUrl online');
+        const user = await User.findById(req.userId).populate('contacts', 'username displayName avatarUrl');
         res.json(user.contacts || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -148,8 +181,17 @@ router.get('/search', async (req, res) => {
                 { username: { $regex: query, $options: 'i' } },
                 { displayName: { $regex: query, $options: 'i' } }
             ]
-        }).select('username displayName avatarUrl bio');
+        }).select('_id username displayName avatarUrl bio');
         res.json(users);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/me', authMiddleware, async (req, res) => {
+    try {
+        await User.findByIdAndDelete(req.userId);
+        res.json({ message: 'Аккаунт удалён' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

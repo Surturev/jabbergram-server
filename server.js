@@ -22,6 +22,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/gifts', require('./routes/gifts'));
 app.use('/api/aibot', require('./routes/aibot'));
+app.use('/api/admin', require('./routes/admin'));
 
 const server = http.createServer(app);
 const io = new Server(server, {

@@ -10,8 +10,12 @@ const UserSchema = new mongoose.Schema({
     displayName: { type: String },
     bio: { type: String, default: '' },
     avatarUrl: { type: String, default: '' },
+    isOnline: { type: Boolean, default: false },
     twoFactorSecret: { type: String, default: '' },
     twoFactorEnabled: { type: Boolean, default: false },
+    premium: { type: Boolean, default: false },
+    premiumExpiresAt: { type: Date, default: null },
+    accentColor: { type: String, default: '#667eea' },
     profiles: [{
         name: String,
         avatarUrl: String,
@@ -35,6 +39,10 @@ const UserSchema = new mongoose.Schema({
     jabbersBalance: { type: Number, default: 0 },
     isVip: { type: Boolean, default: false },
     isAdmin: { type: Boolean, default: false },
+    isVerified: { type: Boolean, default: false },
+    isBanned: { type: Boolean, default: false },
+    banReason: { type: String, default: '' },
+    bannedAt: { type: Date, default: null },
     vipExpiresAt: { type: Date, default: null },
     vipLevel: { type: Number, default: 0 },
     ownedGifts: [{
